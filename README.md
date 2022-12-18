@@ -65,7 +65,7 @@ or you set up the device on new headphones or similar,
 please re-do the calibration as many times as needed
 
 ***
-> Example circuit with a breadboard
+> Example circuit with a breadboard (forwards axis points from the pico towards the USB cable in the provided code)
 
 ![Example circuit with a breadboard](/example/breadboard_circuit.jpg)
 ***
