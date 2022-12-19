@@ -22,13 +22,13 @@
 
 #include <Arduino.h>
 
-#include "Wire.h"
-#include "EEPROM.h"
+#include <Wire.h>
+#include <EEPROM.h>
 #include "Quaternion.h"
 
-#include "Adafruit_Sensor.h"
-#include "Adafruit_MPU6050.h"
-#include "QMC5883LCompass.h"
+#include <Adafruit_Sensor.h>
+#include <Adafruit_MPU6050.h>
+#include <QMC5883LCompass.h>
 
 // Inertial Measurements
 Vector3 acceleration_body;
@@ -50,8 +50,8 @@ Vector3 offset_magnetic_flux;
 Vector3 scalar_magnetic_flux(1, 1, 1);
 
 // Orientation Filter
-const float orientation_filter_frequency = 300;
-const float correction_gain = 0.05;
+const float orientation_filter_frequency = 200;
+const float correction_gain = 0.001;
 
 // EEPROM per 32 Bytes
 // 0 -> 2  : gyroscopic offsets
@@ -85,7 +85,7 @@ union data_union
 struct  {
   int16_t  Begin;           // 2  Begin
   uint16_t Cpt;             // 2  Computer frame or Code
-  float    euler_angles[3]; // 12 [Yaw, Pitch, Roll] Euler angles in degrees
+  float    euler_angles[3]; // 12 [Roll, Pitch, Yaw] Euler angles in degrees
   float    position[3];     // 12 [x, y, z] Position in meters
   int16_t  End;             // 2  End
 } hatire;
@@ -381,6 +381,7 @@ void setup()
   // Initialize I2C Pins (IF USING RASPBERRY PI PICO)
   Wire.setSCL(SCL_PIN);
   Wire.setSDA(SDA_PIN);
+  Wire.begin();
 
   // Initialize pins
   pinMode(LED, OUTPUT);
@@ -398,7 +399,7 @@ void setup()
   // Configure MPU6050
   MPU_6050.setAccelerometerRange(MPU6050_RANGE_4_G);
   MPU_6050.setGyroRange(MPU6050_RANGE_2000_DEG);
-  MPU_6050.setFilterBandwidth(MPU6050_BAND_94_HZ);
+  MPU_6050.setFilterBandwidth(MPU6050_BAND_184_HZ);
 
   // Configure HMC5883
   QMC_5883.setMode(0x01, 0x0C, 0x10, 0x00);
@@ -485,12 +486,12 @@ void loop()
   }
   
   // Set hatire values
-  hatire.euler_angles[0] = euler_angles.z * RAD_TO_DEG;
+  hatire.euler_angles[0] = euler_angles.x * RAD_TO_DEG;
   hatire.euler_angles[1] = euler_angles.y * RAD_TO_DEG;
-  hatire.euler_angles[2] = euler_angles.x * RAD_TO_DEG;
+  hatire.euler_angles[2] = euler_angles.z * RAD_TO_DEG;
 
-  hatire.position[0] = euler_angles.y * RAD_TO_DEG / 4.5f;
-  hatire.position[1] = euler_angles.x * RAD_TO_DEG / 4.5f;
+  hatire.position[0] = euler_angles.x * RAD_TO_DEG / 4.5f;
+  hatire.position[1] = euler_angles.y * RAD_TO_DEG / 4.5f;
   hatire.position[2] = euler_angles.z * RAD_TO_DEG / 4.5f;
 
   // Write to hatire
@@ -499,7 +500,7 @@ void loop()
   if (hatire.Cpt > 999) 
     hatire.Cpt=0;
 
-  // DEBUG
+  // Debug
   /*Serial.print(angular_velocity.x, 1); Serial.print(", ");
   Serial.print(angular_velocity.y, 1); Serial.print(", ");
   Serial.print(angular_velocity.z, 1); Serial.print(", ");
@@ -510,9 +511,17 @@ void loop()
 
   Serial.print(magnetic_flux.x, 1); Serial.print(", ");
   Serial.print(magnetic_flux.y, 1); Serial.print(", ");
-  Serial.print(magnetic_flux.z, 1); Serial.println("");*/
+  Serial.print(magnetic_flux.z, 1); Serial.print(", ");
 
-  /*Serial.print(euler_angles.x * RAD_TO_DEG, 3); Serial.print(", ");
-  Serial.print(euler_angles.y * RAD_TO_DEG, 3); Serial.print(", ");
-  Serial.print(euler_angles.z * RAD_TO_DEG, 3); Serial.println("");*/
+  Serial.print(euler_angles.x * RAD_TO_DEG, 1); Serial.print(", ");
+  Serial.print(euler_angles.y * RAD_TO_DEG, 1); Serial.print(", ");
+  Serial.print(euler_angles.z * RAD_TO_DEG, 1); Serial.println("");*/
+
+  // Visualizer
+  /*Serial.print("Orientation: ");
+  Serial.print(euler_angles.z * RAD_TO_DEG);
+  Serial.print(" ");
+  Serial.print(euler_angles.y * RAD_TO_DEG);
+  Serial.print(" ");
+  Serial.println(euler_angles.x * RAD_TO_DEG);*/
 }
