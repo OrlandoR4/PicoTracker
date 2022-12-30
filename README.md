@@ -1,14 +1,14 @@
-### VERSION 1.1
+### VERSION 2.0
 
 
 # HATIRE-ENABLED HEAD TRACKER FOR OPENTRACK
 
-This program uses the **Raspberry Pico microcontroller**,
+This program uses the **XIAO RP2040 microcontroller**,
 **MPU6050** Inertial Measurement Unit, and the **QMC5883L**
 magnetometer to estimate orientation and output HATIRE
 data for OpenTrack
 
-Uses a single push button for calibration and resetting (with an internal pull up from the raspberry pi pico)
+Uses a single push button for calibration and resetting (with an internal pull up from the microcontroller)
 
 Customize the code as its fit to you and install the necessary dependencies
 
@@ -63,9 +63,3 @@ Configure the axes, mappings, and filter settings as you see fit
 If the raw sensor data on OpenTrack seems erroneous or undersirable,
 or you set up the device on new headphones or similar,
 please re-do the calibration as many times as needed
-
-***
-> Example circuit with a breadboard (forwards axis points from the pico towards the USB cable in the provided code)
-
-![Example circuit with a breadboard](/example/breadboard_circuit.jpg)
-***

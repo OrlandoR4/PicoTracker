@@ -26,9 +26,11 @@
 #include <EEPROM.h>
 #include "Quaternion.h"
 
+#define Wire Wire1
+
+#include <QMC5883LCompass.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_MPU6050.h>
-#include <QMC5883LCompass.h>
 
 // Inertial Measurements
 Vector3 acceleration_body;
@@ -51,7 +53,8 @@ Vector3 scalar_magnetic_flux(1, 1, 1);
 
 // Orientation Filter
 const float orientation_filter_frequency = 200;
-const float correction_gain = 0.001;
+const float accelerometer_correction_gain = 0.25;
+const float magnetometer_correction_gain = 0.25;
 
 // EEPROM per 32 Bytes
 // 0 -> 2  : gyroscopic offsets
@@ -96,15 +99,15 @@ struct  {
  * Change the code to fit your custom sensors if you're not
  * using the QMC5883L and the MPU6050
  */
-Adafruit_MPU6050 MPU_6050;
 QMC5883LCompass QMC_5883;
+Adafruit_MPU6050 MPU_6050;
 /**
  * Customize your pin settings here!
  */
-const int LED = LED_BUILTIN;
-const int BUTTON = 17;
-const int SCL_PIN = 21;
-const int SDA_PIN = 20;
+const int LED = 25;
+const int BUTTON = A0;
+const int SCL_PIN = 7;
+const int SDA_PIN = 6;
 /**
  * Customize your sensor readings here!
  * 
@@ -119,19 +122,19 @@ void read_sensors()
   sensors_event_t a, g, temp;
   MPU_6050.getEvent(&a, &g, &temp);
   // Radians per second
-  angular_velocity.x = -g.gyro.y;
-  angular_velocity.y = -g.gyro.x;
+  angular_velocity.x =  g.gyro.y;
+  angular_velocity.y =  g.gyro.x;
   angular_velocity.z = -g.gyro.z;
   // Meters per second squared
-  acceleration_body.x = -a.acceleration.y;
-  acceleration_body.y = -a.acceleration.x;
+  acceleration_body.x =  a.acceleration.y;
+  acceleration_body.y =  a.acceleration.x;
   acceleration_body.z = -a.acceleration.z;
 
   // Read Magnetometer Data
   QMC_5883.read();
   // Micro-teslas
-  magnetic_flux.x =  QMC_5883.getX();
-  magnetic_flux.y = -QMC_5883.getY();
+  magnetic_flux.x = -QMC_5883.getX();
+  magnetic_flux.y =  QMC_5883.getY();
   magnetic_flux.z = -QMC_5883.getZ();
 }
 // LED blink
@@ -260,7 +263,7 @@ void calibrate_accelerometer(uint32_t timer_trigger_ms)
 void calibrate_magnetometer(uint32_t timer_trigger_ms)
 {
   // Reset offsets
-  offset_magnetic_flux *= 0;
+  offset_magnetic_flux = Vector3(0, 0, 0);
   scalar_magnetic_flux = Vector3(1, 1, 1);
 
   // Track time
@@ -270,8 +273,8 @@ void calibrate_magnetometer(uint32_t timer_trigger_ms)
   uint32_t calibration_timer = 0;
 
   // Magnetometer calibration variables
-  float min[3] = {0};
-  float max[3] = {0};
+  float min[3] = { 1e9,  1e9,  1e9};
+  float max[3] = {-1e9, -1e9, -1e9};
 
   while (true)
   {
@@ -297,7 +300,7 @@ void calibrate_magnetometer(uint32_t timer_trigger_ms)
     if (!changed)
     {
       // Turn off LED for indication
-      digitalWrite(LED, LOW);
+      digitalWrite(LED, HIGH);
 
       // Add time
       calibration_timer += delta_time;
@@ -314,15 +317,15 @@ void calibrate_magnetometer(uint32_t timer_trigger_ms)
       break;
   }
   
-  const float ideal_halfscale = 1.f;
+  const float ideal_halfscale = 10000.f;  
 
-  scalar_magnetic_flux.x = 2.0f * ideal_halfscale / ( abs(max[0]) + abs(min[0]) );
-  scalar_magnetic_flux.y = 2.0f * ideal_halfscale / ( abs(max[1]) + abs(min[1]) );
-  scalar_magnetic_flux.z = 2.0f * ideal_halfscale / ( abs(max[2]) + abs(min[2]) );
+  scalar_magnetic_flux.x = (2.0f * ideal_halfscale) / (max[0] - min[0]);
+  scalar_magnetic_flux.y = (2.0f * ideal_halfscale) / (max[1] - min[1]);
+  scalar_magnetic_flux.z = (2.0f * ideal_halfscale) / (max[2] - min[2]);
 
-  offset_magnetic_flux.x = (max[0] * scalar_magnetic_flux.x) - ideal_halfscale;
-  offset_magnetic_flux.y = (max[1] * scalar_magnetic_flux.y) - ideal_halfscale;
-  offset_magnetic_flux.z = (max[2] * scalar_magnetic_flux.z) - ideal_halfscale;
+  offset_magnetic_flux.x = max[0] - ((max[0] - min[0]) / 2);
+  offset_magnetic_flux.y = max[1] - ((max[1] - min[1]) / 2);
+  offset_magnetic_flux.z = max[2] - ((max[2] - min[2]) / 2);
 
   return;
 }
@@ -342,14 +345,14 @@ void update_attitude()
 
     angular_velocity -= offset_angular_velocity;
     acceleration_body -= offset_acceleration_body;
-    magnetic_flux = magnetic_flux * scalar_magnetic_flux - offset_magnetic_flux;
+    magnetic_flux = (magnetic_flux - offset_magnetic_flux) * scalar_magnetic_flux;
 
     // Update filter
     Vector3 ori_acceleration_inertial = true_orientation.rotate_vector(acceleration_body);
 
     true_orientation.update_with_rates(delta_time_s, angular_velocity);
-    true_orientation.update_with_accel(ori_acceleration_inertial, Vector3(0, 0, -1), correction_gain);
-    true_orientation.update_with_mag(magnetic_flux, acceleration_body, Vector3(0, 1, 0), Quaternion(1, 0, 0, 0), correction_gain);
+    true_orientation.update_with_accel(ori_acceleration_inertial, Vector3(0, 0, -1), accelerometer_correction_gain);
+    true_orientation.update_with_mag(magnetic_flux, acceleration_body, Vector3(0, 1, 0), Quaternion(1, 0, 0, 0), magnetometer_correction_gain);
 
     // Update output quaternion
     orientation = offset_quaternion * true_orientation;
@@ -378,7 +381,7 @@ void setup()
   // Begin EEPROM
   EEPROM.begin(256);
 
-  // Initialize I2C Pins (IF USING RASPBERRY PI PICO)
+  // Initialize I2C Pins
   Wire.setSCL(SCL_PIN);
   Wire.setSDA(SDA_PIN);
   Wire.begin();
@@ -387,22 +390,25 @@ void setup()
   pinMode(LED, OUTPUT);
   pinMode(BUTTON, INPUT_PULLUP);
 
-  // Initialize MPU6050
-  while (!MPU_6050.begin())
-    error_message("Failed to initialize MPU6050");
+  pinMode(16, OUTPUT); digitalWrite(16, HIGH);
+  pinMode(17, OUTPUT); digitalWrite(17, HIGH);
 
   // Initialize QMC5883
   QMC_5883.init();
   Wire.beginTransmission(0x0D);
-  if (Wire.endTransmission()) { error_message("Failed to initialize QMC5883"); }
+  if (Wire.endTransmission() > 0) { error_message("Failed to initialize QMC5883"); }
+
+  // Initialize MPU6050
+  while (!MPU_6050.begin())
+    error_message("Failed to initialize MPU6050");
+
+  // Configure QMC5883
+  QMC_5883.setMode(0x01, 0x0C, 0x10, 0x00);
 
   // Configure MPU6050
   MPU_6050.setAccelerometerRange(MPU6050_RANGE_4_G);
-  MPU_6050.setGyroRange(MPU6050_RANGE_2000_DEG);
-  MPU_6050.setFilterBandwidth(MPU6050_BAND_184_HZ);
-
-  // Configure HMC5883
-  QMC_5883.setMode(0x01, 0x0C, 0x10, 0x00);
+  MPU_6050.setGyroRange(MPU6050_RANGE_1000_DEG);
+  MPU_6050.setFilterBandwidth(MPU6050_BAND_44_HZ);
   
   // Setup HATIRE
   hatire.Begin = 0xAAAA;
@@ -425,7 +431,7 @@ void setup()
     
     // Calibrate Magnetometer
     Serial.println("Calibrating magnetometer, gently spin around the sensor on all axis...");
-    calibrate_magnetometer(5000);
+    calibrate_magnetometer(10000);
 
     // Set values
     calibration_data.calibration_struct.off_x_g  = offset_angular_velocity.x;
@@ -465,7 +471,7 @@ void setup()
   }
 
   // Begin Loop
-  digitalWrite(LED, HIGH);
+  digitalWrite(LED, LOW);
   delay(1000);
 }
 // Loop
@@ -473,6 +479,7 @@ void loop()
 {
   // Update Orientation
   update_attitude();
+  // read_sensors();
 
   // Zero Orientation until released
   if (!digitalRead(BUTTON))
@@ -516,7 +523,7 @@ void loop()
   Serial.print(euler_angles.x * RAD_TO_DEG, 1); Serial.print(", ");
   Serial.print(euler_angles.y * RAD_TO_DEG, 1); Serial.print(", ");
   Serial.print(euler_angles.z * RAD_TO_DEG, 1); Serial.println("");*/
-
+  
   // Visualizer
   /*Serial.print("Orientation: ");
   Serial.print(euler_angles.z * RAD_TO_DEG);
