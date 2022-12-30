@@ -28,7 +28,7 @@
 
 #define Wire Wire1
 
-#include <QMC5883LCompass.h>
+#include "QMC5883LCompass.h"
 #include <Adafruit_Sensor.h>
 #include <Adafruit_MPU6050.h>
 
