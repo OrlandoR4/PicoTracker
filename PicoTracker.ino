@@ -53,8 +53,8 @@ Vector3 scalar_magnetic_flux(1, 1, 1);
 
 // Orientation Filter
 const float orientation_filter_frequency = 200;
-const float accelerometer_correction_gain = 0.25;
-const float magnetometer_correction_gain = 0.25;
+const float accelerometer_correction_gain = 0.01;
+const float magnetometer_correction_gain = 0.01;
 
 // EEPROM per 32 Bytes
 // 0 -> 2  : gyroscopic offsets
